@@ -34,14 +34,7 @@ export const useSettingsStorage = () => {
           
           if (storedLogo) {
             console.log("Logo chargé, longueur:", storedLogo.length);
-            
-            // Pour une meilleure persistance, vérifier que le logo est une URL de données valide
-            if (storedLogo.startsWith('data:image/')) {
-              parsedSettings.logo = storedLogo;
-            } else {
-              console.log("Format de logo invalide, utilisation du logo par défaut");
-              parsedSettings.logo = "/lovable-uploads/840dfb44-1c4f-4475-9321-7f361be73327.png";
-            }
+            parsedSettings.logo = storedLogo;
           } else {
             console.log("Aucun logo trouvé dans le stockage séparé");
             parsedSettings.logo = "/lovable-uploads/840dfb44-1c4f-4475-9321-7f361be73327.png";
@@ -80,17 +73,39 @@ export const useSettingsStorage = () => {
       
       setSettings(parsedSettings as SiteSettings);
       console.log("Paramètres chargés avec succès");
+      
+      // Appliquer le logo au document
+      if (parsedSettings.logo) {
+        // Créer une session temporaire pour le logo
+        sessionStorage.setItem('current_logo', parsedSettings.logo);
+        console.log("Logo sauvegardé en session pour persistance");
+      }
     } catch (error) {
       console.error("Erreur lors du chargement des paramètres:", error);
-      setSettings({...defaultSettings, darkMode: false} as SiteSettings);
+      
+      // Essayer de récupérer depuis sessionStorage en cas d'erreur
+      const sessionLogo = sessionStorage.getItem('current_logo');
+      if (sessionLogo) {
+        console.log("Récupération du logo depuis la session");
+        const fallbackSettings = {...defaultSettings, logo: sessionLogo, darkMode: false};
+        setSettings(fallbackSettings as SiteSettings);
+      } else {
+        setSettings({...defaultSettings, darkMode: false} as SiteSettings);
+      }
     }
   }, []);
 
   // Sauvegarder les paramètres à chaque modification de manière plus robuste
   useEffect(() => {
     try {
+      // Sauvegarder le logo dans sessionStorage pour persistance entre rechargements
+      if (settings.logo && settings.logo !== 'stored_separately') {
+        sessionStorage.setItem('current_logo', settings.logo);
+        console.log("Logo sauvegardé en session pour persistance");
+      }
+      
       // Vérifier et sauvegarder le logo et favicon avec isolation
-      if (settings.logo) {
+      if (settings.logo && settings.logo !== 'stored_separately') {
         // Vérifier si c'est une URL de données
         if (settings.logo.startsWith('data:')) {
           try {
@@ -102,6 +117,9 @@ export const useSettingsStorage = () => {
             localStorage.setItem('site_logo', settings.logo);
             localStorage.setItem('site_logo_timestamp', timestamp.toString());
             console.log("Logo sauvegardé avec horodatage:", timestamp);
+            
+            // Également sauvegarder en sessionStorage
+            sessionStorage.setItem('current_logo', settings.logo);
           } catch (logoError) {
             console.error("Erreur lors de la sauvegarde du logo:", logoError);
             
@@ -109,6 +127,7 @@ export const useSettingsStorage = () => {
             try {
               const compressedLogo = settings.logo.substring(0, 1000000); // Limiter la taille
               localStorage.setItem('site_logo', compressedLogo);
+              sessionStorage.setItem('current_logo', compressedLogo);
               console.log("Logo sauvegardé en version compressée");
             } catch (compressError) {
               console.error("Impossible de sauvegarder même le logo compressé:", compressError);
@@ -167,6 +186,7 @@ export const useSettingsStorage = () => {
     // Supprimer également les images stockées séparément
     localStorage.removeItem('site_logo');
     localStorage.removeItem('site_logo_timestamp');
+    sessionStorage.removeItem('current_logo');
     
     // Supprimer toutes les versions horodatées
     for (let i = 0; i < localStorage.length; i++) {

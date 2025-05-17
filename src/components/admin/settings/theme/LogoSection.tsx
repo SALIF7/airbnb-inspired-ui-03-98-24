@@ -34,17 +34,23 @@ export const LogoSection = ({
       // Use a default logo if none is provided
       const defaultLogo = "/lovable-uploads/840dfb44-1c4f-4475-9321-7f361be73327.png";
       
-      // Check if the logo is stored separately
-      if (settings.logo === 'stored_separately') {
-        // Récupérer la version la plus récente du logo
+      if (logoUrl) {
+        // Si un logoUrl est fourni directement, l'utiliser prioritairement
+        console.log("Utilisation du logoUrl fourni directement");
+        setPreviewUrl(logoUrl);
+      } else if (settings.logo && settings.logo !== 'stored_separately') {
+        // Si le logo est stocké directement dans les paramètres
+        console.log("Logo chargé directement depuis les paramètres");
+        setPreviewUrl(settings.logo);
+      } else if (settings.logo === 'stored_separately') {
+        // Le logo est stocké séparément, essayer de le récupérer
         const timestamp = localStorage.getItem('site_logo_timestamp');
-        let storedLogo;
+        let storedLogo = null;
         
         if (timestamp) {
           storedLogo = localStorage.getItem(`site_logo_${timestamp}`);
         }
         
-        // Si pas trouvé avec timestamp, essayer la version standard
         if (!storedLogo) {
           storedLogo = localStorage.getItem('site_logo');
         }
@@ -56,12 +62,9 @@ export const LogoSection = ({
           console.log("Aucun logo trouvé dans le stockage local, utilisation du logo par défaut");
           setPreviewUrl(defaultLogo);
         }
-      } else if (settings.logo) {
-        console.log("Utilisation du logo depuis les paramètres");
-        setPreviewUrl(settings.logo);
       } else {
-        console.log("Aucun logo trouvé, utilisation du logoUrl ou du logo par défaut");
-        setPreviewUrl(logoUrl || defaultLogo);
+        console.log("Aucun logo trouvé, utilisation du logo par défaut");
+        setPreviewUrl(defaultLogo);
       }
     } catch (error) {
       console.error("Error loading logo:", error);
@@ -82,25 +85,7 @@ export const LogoSection = ({
     // Force reload by setting a temporary empty value
     setPreviewUrl("");
     setTimeout(() => {
-      const defaultLogo = "/lovable-uploads/840dfb44-1c4f-4475-9321-7f361be73327.png";
-      
-      if (settings.logo === 'stored_separately') {
-        // Essayer de récupérer la version la plus récente
-        const timestamp = localStorage.getItem('site_logo_timestamp');
-        let storedLogo;
-        
-        if (timestamp) {
-          storedLogo = localStorage.getItem(`site_logo_${timestamp}`);
-        }
-        
-        if (!storedLogo) {
-          storedLogo = localStorage.getItem('site_logo');
-        }
-        
-        setPreviewUrl(storedLogo || logoUrl || defaultLogo);
-      } else {
-        setPreviewUrl(settings.logo || logoUrl || defaultLogo);
-      }
+      setPreviewUrl(logoUrl || settings.logo || "/lovable-uploads/840dfb44-1c4f-4475-9321-7f361be73327.png");
     }, 100);
   };
   
@@ -162,8 +147,8 @@ export const LogoSection = ({
           )}
           
           <div className="flex items-center gap-4">
-            <Button variant="outline" className="relative" disabled={logoUploading}>
-              {logoUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button variant="outline" className="relative w-40" disabled={logoUploading}>
+              {logoUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {previewUrl ? "Changer le logo" : "Ajouter un logo"}
               <input
                 id="logo"

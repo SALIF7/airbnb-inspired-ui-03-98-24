@@ -9,7 +9,7 @@ export function useAdminSettings() {
   const { settings, updateSettings, resetSettings, exportSettings, importSettings } = useSiteSettings();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState("general");
-  const [logoUrl, setLogoUrl] = useState<string>(settings.logo === 'stored_separately' ? localStorage.getItem('site_logo') || "/placeholder.svg" : settings.logo || "/placeholder.svg");
+  const [logoUrl, setLogoUrl] = useState<string>(settings.logo === 'stored_separately' ? localStorage.getItem('site_logo') || sessionStorage.getItem('current_logo') || "/placeholder.svg" : settings.logo || "/placeholder.svg");
   const [logoUploading, setLogoUploading] = useState(false);
   const [faviconUrl, setFaviconUrl] = useState<string>(settings.favicon === 'stored_separately' ? localStorage.getItem('site_favicon') || "/favicon.ico" : settings.favicon || "/favicon.ico");
   const [faviconUploading, setFaviconUploading] = useState(false);
@@ -18,9 +18,22 @@ export function useAdminSettings() {
   // Synchronize local state with settings when they change
   useEffect(() => {
     if (settings.logo) {
-      const logoSrc = settings.logo === 'stored_separately' 
-        ? localStorage.getItem('site_logo') || "/placeholder.svg" 
-        : settings.logo;
+      let logoSrc = settings.logo;
+      
+      if (settings.logo === 'stored_separately') {
+        // Essayer d'abord le localStorage
+        logoSrc = localStorage.getItem('site_logo') || "/placeholder.svg";
+        
+        // Si pas trouvé, essayer sessionStorage
+        if (!logoSrc || logoSrc === "/placeholder.svg") {
+          const sessionLogo = sessionStorage.getItem('current_logo');
+          if (sessionLogo) {
+            logoSrc = sessionLogo;
+            console.log("Logo récupéré depuis la session");
+          }
+        }
+      }
+      
       setLogoUrl(logoSrc);
     }
     
@@ -36,6 +49,12 @@ export function useAdminSettings() {
     if (!e.target.files || e.target.files.length === 0) return;
     
     const file = e.target.files[0];
+    
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Le logo est trop volumineux (max 2MB)");
+      return;
+    }
+    
     setLogoUploading(true);
     
     // Create a preview URL and apply it immediately to see the change
@@ -47,9 +66,17 @@ export function useAdminSettings() {
         // Update locally for UI
         setLogoUrl(result);
         
-        // Store in settings and explicitly in localStorage
+        // Store in settings directly (not as 'stored_separately')
         updateSettings({ logo: result });
+        
+        // Sauvegarder aussi en localStorage et sessionStorage pour plus de persistance
         localStorage.setItem('site_logo', result);
+        sessionStorage.setItem('current_logo', result);
+        
+        // Ajouter un timestamp pour éviter les problèmes de cache
+        const timestamp = new Date().getTime();
+        localStorage.setItem(`site_logo_${timestamp}`, result);
+        localStorage.setItem('site_logo_timestamp', timestamp.toString());
         
         // Then simulate the server upload for persistent storage
         setTimeout(() => {
@@ -66,6 +93,12 @@ export function useAdminSettings() {
     if (!e.target.files || e.target.files.length === 0) return;
     
     const file = e.target.files[0];
+    
+    if (file.size > 1 * 1024 * 1024) {
+      toast.error("Le favicon est trop volumineux (max 1MB)");
+      return;
+    }
+    
     setFaviconUploading(true);
     
     // Create a preview URL and apply it immediately
@@ -77,9 +110,16 @@ export function useAdminSettings() {
         // Update locally for UI
         setFaviconUrl(result);
         
-        // Store in settings and explicitly in localStorage
+        // Store in settings directly (not as 'stored_separately')
         updateSettings({ favicon: result });
+        
+        // Store explicitly in localStorage
         localStorage.setItem('site_favicon', result);
+        
+        // Ajouter un timestamp pour éviter les problèmes de cache
+        const timestamp = new Date().getTime();
+        localStorage.setItem(`site_favicon_${timestamp}`, result);
+        localStorage.setItem('site_favicon_timestamp', timestamp.toString());
         
         // Then simulate the server upload
         setTimeout(() => {

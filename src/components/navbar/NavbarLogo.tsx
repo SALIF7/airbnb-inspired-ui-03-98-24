@@ -16,47 +16,39 @@ export const NavbarLogo = () => {
     try {
       // Use a default logo if none is provided
       const defaultLogo = "/lovable-uploads/840dfb44-1c4f-4475-9321-7f361be73327.png";
-      let logoSrc = "";
       
-      if (settings.logo === 'stored_separately') {
-        // Récupérer la version la plus récente du logo via le timestamp
+      if (settings.logo && settings.logo !== 'stored_separately') {
+        // Si le logo est stocké directement dans les paramètres
+        console.log("Logo chargé directement depuis les paramètres");
+        setCurrentLogo(settings.logo);
+      } else if (settings.logo === 'stored_separately') {
+        // Récupérer la version la plus récente du logo avec timestamp
         const timestamp = localStorage.getItem('site_logo_timestamp');
-        let storedLogo;
+        let storedLogo = null;
         
         if (timestamp) {
-          // Récupérer la version horodatée spécifique (plus fiable)
           storedLogo = localStorage.getItem(`site_logo_${timestamp}`);
-          console.log("Chargement du logo avec horodatage:", timestamp);
         }
         
         // Si pas trouvé avec timestamp, essayer la version standard
         if (!storedLogo) {
           storedLogo = localStorage.getItem('site_logo');
-          console.log("Logo non trouvé avec horodatage, utilisation de la version standard");
         }
         
+        // Si toujours pas trouvé, utiliser le logo par défaut
         if (storedLogo) {
-          logoSrc = storedLogo;
           console.log("Logo chargé depuis le stockage local");
+          setCurrentLogo(storedLogo);
         } else {
-          logoSrc = defaultLogo;
-          console.log("Aucun logo trouvé dans le stockage local, utilisation du logo par défaut");
+          console.log("Utilisation du logo par défaut (aucun logo trouvé)");
+          setCurrentLogo(defaultLogo);
         }
-      } else if (settings.logo) {
-        logoSrc = settings.logo || defaultLogo;
-        console.log("Logo chargé depuis les paramètres");
       } else {
-        logoSrc = defaultLogo;
-        console.log("Logo par défaut utilisé");
+        // Utiliser le logo par défaut
+        console.log("Utilisation du logo par défaut");
+        setCurrentLogo(defaultLogo);
       }
       
-      // Vérifier que le logo est valide (commence par data:image ou http)
-      if (!logoSrc.startsWith('data:image') && !logoSrc.startsWith('http') && !logoSrc.startsWith('/')) {
-        console.error("Format de logo invalide:", logoSrc.substring(0, 30));
-        logoSrc = defaultLogo;
-      }
-      
-      setCurrentLogo(logoSrc);
       setLogoLoaded(false);
       setLogoError(false);
     } catch (error) {
