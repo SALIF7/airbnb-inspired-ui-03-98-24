@@ -1,9 +1,10 @@
 
 import { Job } from "@/types/job";
 import { isBase64Image, isValidHttpUrl, isBlobUrl } from "./imageValidation";
+import { getJobImages, getJobFeaturedImage } from "./imageStorage";
 
 /**
- * Traite les images stockées pour une offre d'emploi
+ * Traite les images stockées pour une offre d'emploi avec isolation stricte
  */
 export const processStoredImages = (job: Job): Job => {
   if (!job.id) return job;
@@ -24,48 +25,20 @@ export const processStoredImages = (job: Job): Job => {
       return job;
     }
     
-    // Récupérer les images depuis localStorage - UNIQUEMENT pour ce job spécifique
-    const savedImagesKey = `job_images_${job.id}`;
-    const savedImagesStr = localStorage.getItem(savedImagesKey);
+    // Récupérer les images depuis localStorage UNIQUEMENT pour ce job spécifique
+    // Ne plus jamais mélanger avec les images "latest" ou d'autres jobs
+    const savedImages = getJobImages(job.id);
     
-    // Ne plus utiliser les images "latest" comme fallback pour éviter le mélange d'images
-    // entre différentes offres
-    
-    if (savedImagesStr) {
-      try {
-        const savedImages = JSON.parse(savedImagesStr);
-        if (Array.isArray(savedImages) && savedImages.length > 0) {
-          console.log(`Images récupérées depuis localStorage pour l'offre ${job.id}`);
-          job.images = savedImages.filter(img => isBase64Image(img) || isValidHttpUrl(img));
-          if (!job.image && job.images.length > 0) {
-            job.image = job.images[0];
-          }
-        }
-      } catch (e) {
-        console.error(`Erreur de parsing pour ${savedImagesKey}:`, e);
-      }
-    }
-    
-    // Récupérer l'image principale si nécessaire, uniquement depuis la clé spécifique à ce job
-    if (!job.image || !isValidHttpUrl(job.image)) {
-      const featuredImageKey = `job_featured_image_${job.id}`;
-      const featuredImage = localStorage.getItem(featuredImageKey);
+    if (savedImages.length > 0) {
+      console.log(`${savedImages.length} images récupérées depuis localStorage pour l'offre ${job.id}`);
+      job.images = savedImages;
       
-      if (featuredImage) {
-        try {
-          // Essayer de nettoyer l'image
-          if (featuredImage.startsWith('"') && featuredImage.endsWith('"')) {
-            job.image = featuredImage.substring(1, featuredImage.length - 1);
-          } else {
-            job.image = featuredImage;
-          }
-          console.log(`Image principale récupérée pour l'offre ${job.id}:`, job.image);
-        } catch (e) {
-          console.error(`Erreur lors du traitement de l'image principale pour ${job.id}:`, e);
-        }
-      } else if (job.images && job.images.length > 0) {
-        job.image = job.images[0];
-        console.log(`Image principale définie à partir des images pour l'offre ${job.id}:`, job.image);
+      // Définir l'image principale si nécessaire
+      if (!job.image) {
+        // Récupérer l'image principale ou utiliser la première image
+        const featuredImage = getJobFeaturedImage(job.id);
+        job.image = featuredImage || savedImages[0];
+        console.log(`Image principale définie pour l'offre ${job.id}`);
       }
     }
     

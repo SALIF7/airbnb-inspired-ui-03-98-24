@@ -17,7 +17,11 @@ export const purgeOldImageEntries = (): void => {
       if (key && (key.includes('job_featured_image_') || key.includes('job_images_'))) {
         // Ne supprimer que les anciennes entrées (pas les "latest")
         if (!key.includes('_latest')) {
-          keysToRemove.push(key);
+          // Ne pas supprimer les clés qui contiennent un ID spécifique
+          const matches = key.match(/_([\w-]+)$/);
+          if (matches && matches[1] === 'latest') {
+            keysToRemove.push(key);
+          }
         }
       }
       
@@ -45,21 +49,29 @@ export const purgeOldImageEntries = (): void => {
 };
 
 /**
+ * Vérifie si une clé fait référence à une entité avec un ID spécifique
+ */
+const isSpecificEntityKey = (key: string, entityType: string, entityId: string): boolean => {
+  const pattern = new RegExp(`${entityType}_${entityId}$`);
+  return pattern.test(key);
+};
+
+/**
  * Stocke des images dans localStorage avec un ID spécifique
+ * et garantit qu'elles ne seront pas écrasées par d'autres entités
  */
 export const storeImagesToLocalStorage = async (
   key: string, 
   images: string[], 
   compressFunction: (img: string, quality: number) => Promise<string>,
-  jobId?: string
+  entityId?: string
 ): Promise<string[]> => {
   try {
     // Purger les anciennes entrées pour libérer de l'espace
     purgeOldImageEntries();
     
-    // Si nous avons un jobId, utiliser des clés spécifiques à ce job
-    // Sinon, utiliser temporairement les clés "latest" (lors de la création)
-    const storageKey = jobId ? `${key}_${jobId}` : `${key}_latest`;
+    // Si nous avons un entityId, utiliser des clés spécifiques à cette entité
+    const storageKey = entityId ? `${key}_${entityId}` : `${key}_latest`;
     
     // Limiter à max 3 images pour éviter de dépasser le quota
     const limitedImages = images.slice(0, 3);
@@ -85,6 +97,11 @@ export const storeImagesToLocalStorage = async (
     if (validImages.length > 0) {
       localStorage.setItem(storageKey, JSON.stringify(validImages));
       console.log(`${validImages.length} images converties et stockées dans ${storageKey}`);
+      
+      // Ne pas écraser d'autres entités - stocker UNIQUEMENT avec l'ID spécifique
+      if (entityId) {
+        console.log(`Images associées spécifiquement à l'entité ${entityId}`);
+      }
     }
     
     return validImages;
@@ -96,20 +113,20 @@ export const storeImagesToLocalStorage = async (
 
 /**
  * Stocke une image unique dans localStorage avec versionnement
+ * et isolation complète entre différentes entités
  */
 export const storeSingleImageToLocalStorage = async (
   key: string, 
   image: string,
   compressFunction: (img: string, quality: number) => Promise<string>,
-  jobId?: string
+  entityId?: string
 ): Promise<string> => {
   try {
     // Purger les anciennes entrées pour libérer de l'espace
     purgeOldImageEntries();
     
-    // Si nous avons un jobId, utiliser des clés spécifiques à ce job
-    // Sinon, utiliser temporairement les clés "latest"
-    const storageKey = jobId ? `${key}_${jobId}` : `${key}_latest`;
+    // Si nous avons un entityId, utiliser des clés spécifiques à cette entité
+    const storageKey = entityId ? `${key}_${entityId}` : `${key}_latest`;
     
     // Compresser l'image
     const compressedImage = await compressFunction(image, 0.7);
@@ -119,6 +136,7 @@ export const storeSingleImageToLocalStorage = async (
       const timestamp = new Date().getTime();
       localStorage.setItem(`${storageKey}_${timestamp}`, compressedImage);
       localStorage.setItem(`${key}_timestamp`, timestamp.toString());
+      console.log(`Image versionnée stockée dans ${storageKey}_${timestamp}`);
     }
     
     // Toujours stocker la version standard
@@ -133,18 +151,28 @@ export const storeSingleImageToLocalStorage = async (
 };
 
 /**
- * Récupère des images depuis localStorage
+ * Récupère des images depuis localStorage en respectant l'isolation des entités
  */
-export const getImagesFromLocalStorage = (key: string, jobId?: string): string[] => {
+export const getImagesFromLocalStorage = (key: string, entityId?: string): string[] => {
   try {
-    const storageKey = jobId ? `${key}_${jobId}` : `${key}_latest`;
+    // Utiliser UNIQUEMENT la clé spécifique à l'entité demandée
+    const storageKey = entityId ? `${key}_${entityId}` : `${key}_latest`;
     const imagesStr = localStorage.getItem(storageKey);
     
-    if (!imagesStr) return [];
+    if (!imagesStr) {
+      console.log(`Aucune image trouvée pour la clé ${storageKey}`);
+      return [];
+    }
     
     try {
       const images = JSON.parse(imagesStr);
-      return Array.isArray(images) ? images : [];
+      if (Array.isArray(images)) {
+        console.log(`${images.length} images récupérées depuis ${storageKey}`);
+        return images;
+      } else {
+        console.error(`Format invalide pour ${storageKey}, attendu: tableau`);
+        return [];
+      }
     } catch (e) {
       console.error(`Erreur de parsing pour ${storageKey}:`, e);
       return [];
@@ -156,11 +184,12 @@ export const getImagesFromLocalStorage = (key: string, jobId?: string): string[]
 };
 
 /**
- * Récupère une image unique depuis localStorage avec gestion des versions
+ * Récupère une image unique depuis localStorage avec isolation par entité
  */
-export const getSingleImageFromLocalStorage = (key: string, jobId?: string): string => {
+export const getSingleImageFromLocalStorage = (key: string, entityId?: string): string => {
   try {
-    const storageKey = jobId ? `${key}_${jobId}` : `${key}_latest`;
+    // Utiliser UNIQUEMENT la clé spécifique à l'entité demandée
+    const storageKey = entityId ? `${key}_${entityId}` : `${key}_latest`;
     
     // Vérifier d'abord s'il existe une version avec timestamp
     const timestamp = localStorage.getItem(`${key}_timestamp`);
@@ -168,14 +197,23 @@ export const getSingleImageFromLocalStorage = (key: string, jobId?: string): str
     
     if (timestamp) {
       image = localStorage.getItem(`${storageKey}_${timestamp}`);
+      if (image) {
+        console.log(`Image récupérée avec timestamp pour ${storageKey}`);
+      }
     }
     
     // Si pas trouvé avec timestamp, utiliser la version standard
     if (!image) {
       image = localStorage.getItem(storageKey);
+      if (image) {
+        console.log(`Image récupérée depuis la clé standard ${storageKey}`);
+      }
     }
     
-    if (!image) return '';
+    if (!image) {
+      console.log(`Aucune image trouvée pour ${storageKey}`);
+      return '';
+    }
     
     // Nettoyer l'image des guillemets si nécessaire
     if (image.startsWith('"') && image.endsWith('"')) {
@@ -190,7 +228,7 @@ export const getSingleImageFromLocalStorage = (key: string, jobId?: string): str
 };
 
 /**
- * Supprime toutes les images temporaires (latest)
+ * Supprime toutes les images temporaires (latest) sans toucher aux images spécifiques
  */
 export const clearTemporaryImages = (): void => {
   try {
@@ -199,5 +237,24 @@ export const clearTemporaryImages = (): void => {
     console.log('Images temporaires supprimées');
   } catch (error) {
     console.error('Erreur lors de la suppression des images temporaires:', error);
+  }
+};
+
+/**
+ * Renomme une clé temporaire en clé définitive avec un ID
+ */
+export const finalizeTemporaryImages = (key: string, tempKey: string, entityId: string): boolean => {
+  try {
+    const tempImages = localStorage.getItem(tempKey);
+    if (tempImages) {
+      localStorage.setItem(`${key}_${entityId}`, tempImages);
+      localStorage.removeItem(tempKey);
+      console.log(`Images temporaires finalisées pour ${entityId}`);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Erreur lors de la finalisation des images:', error);
+    return false;
   }
 };

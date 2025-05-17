@@ -19,27 +19,41 @@ export const NavbarLogo = () => {
       let logoSrc = "";
       
       if (settings.logo === 'stored_separately') {
-        // Récupérer la version la plus récente du logo
+        // Récupérer la version la plus récente du logo via le timestamp
         const timestamp = localStorage.getItem('site_logo_timestamp');
         let storedLogo;
         
         if (timestamp) {
+          // Récupérer la version horodatée spécifique (plus fiable)
           storedLogo = localStorage.getItem(`site_logo_${timestamp}`);
+          console.log("Chargement du logo avec horodatage:", timestamp);
         }
         
         // Si pas trouvé avec timestamp, essayer la version standard
         if (!storedLogo) {
           storedLogo = localStorage.getItem('site_logo');
+          console.log("Logo non trouvé avec horodatage, utilisation de la version standard");
         }
         
-        logoSrc = storedLogo || defaultLogo;
-        console.log("Logo chargé depuis le stockage local:", logoSrc.substring(0, 30) + "...");
+        if (storedLogo) {
+          logoSrc = storedLogo;
+          console.log("Logo chargé depuis le stockage local");
+        } else {
+          logoSrc = defaultLogo;
+          console.log("Aucun logo trouvé dans le stockage local, utilisation du logo par défaut");
+        }
       } else if (settings.logo) {
         logoSrc = settings.logo || defaultLogo;
-        console.log("Logo chargé depuis les paramètres:", logoSrc.substring(0, 30) + "...");
+        console.log("Logo chargé depuis les paramètres");
       } else {
         logoSrc = defaultLogo;
         console.log("Logo par défaut utilisé");
+      }
+      
+      // Vérifier que le logo est valide (commence par data:image ou http)
+      if (!logoSrc.startsWith('data:image') && !logoSrc.startsWith('http') && !logoSrc.startsWith('/')) {
+        console.error("Format de logo invalide:", logoSrc.substring(0, 30));
+        logoSrc = defaultLogo;
       }
       
       setCurrentLogo(logoSrc);
